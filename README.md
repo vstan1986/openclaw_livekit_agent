@@ -1,53 +1,120 @@
-# SIP Connector for WebRTC (LiveKit + Sber Voice)
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.11-blue?logo=python" alt="Python">
+  <img src="https://img.shields.io/badge/Silero%20TTS-v1.0-green" alt="Silero TTS">
+  <img src="https://img.shields.io/badge/LiveKit%20Agent-v1.6-purple?logo=livekit" alt="LiveKit">
+  <img src="https://img.shields.io/badge/Sber%20STT-SaluteSpeech-blueviolet" alt="Sber STT">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
+</p>
 
-Voice assistant for WebRTC using LiveKit SIP, Sber Voice (TTS/STT) and an LLM.
+# LiveKit Voice Agent — SIP-Backed Voice Assistant
 
-## Services
+**A voice AI assistant that answers calls over SIP and speaks back using Sber Voice (STT/TTS) and an LLM of your choice.**
 
-| Service | Purpose |
-|---------|---------|
-| **livekit** | WebRTC SFU (Signal), v1.12 |
-| **sip** | SIP gateway (SIP ↔ WebRTC) |
-| **redis** | LiveKit coordination |
-| **lk-tts** | Silero TTS microservice (HTTP) |
-| **lk-auth** | Sber Voice OAuth 2.0 token management (HTTP) |
-| **lk-inbound** | LiveKit Agent — inbound (SIP → WebRTC) |
+Callers speak to the assistant over a regular phone line (SIP). The assistant transcribes their speech with Sber STT, generates a response with any OpenAI-compatible LLM (Ollama, GPT, etc.), and speaks it back using Silero TTS — all in real time.
 
-## Quick Start
+```
+Caller ◄──SIP──► LiveKit SIP Trunk ◄──WebRTC──► Agent (LiveKit SDK)
+                                                    │
+                                           ┌────────┼────────┐
+                                           ▼        ▼        ▼
+                                        Sber STT  LLM   Silero TTS
+```
+
+## ✨ Features
+
+- **📞 SIP telephony** — inbound + outbound calls via LiveKit SIP Trunk
+- **🎙️ Sber SaluteSpeech STT** — gRPC streaming speech recognition (Russian language)
+- **🗣️ Silero TTS** — self-hosted neural text-to-speech (HTTP microservice)
+- **🧠 Any LLM** — OpenAI-compatible API (Ollama, GPT, Claude, etc.)
+- **🔇 No VAD needed** — server-side endpointing via Sber's EOU detection
+- **🛡️ Confirmation phrases** — instant "one moment" playback while LLM thinks (no silence gaps)
+- **🔌 Modular services** — STT, TTS, auth all run as separate microservices
+- **🐳 Docker Compose** — single `up -d` to start everything
+- **⚠️ Resilience** — configurable retry, apology playback on LLM errors, silence timeout → hangup
+
+## 📦 Quick Start
 
 ```bash
-cp .env.example .env   # fill in variables
+# 1. Copy and fill in environment
+cp .env.example .env
+
+# 2. Start all services
 docker compose up -d
 ```
 
-### Environment Variables
+### Required Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `LIVEKIT_URL` | ✅ | ws://\<host\>:7880 |
-| `LIVEKIT_API_KEY` | ✅ | From livekit.yaml |
-| `LIVEKIT_API_SECRET` | ✅ | From livekit.yaml |
-| `EXTERNAL_IP` | ✅ | Server external IP |
-| `LLM_BASE_URL` | ✅ | LLM URL (OpenAI-compatible) |
-| `LLM_API_KEY` | ❌ | LLM API key |
-| `SBER_CLIENT_ID` | ✅ | Sber RCE key Client ID |
-| `SBER_CLIENT_SECRET` | ✅ | Sber RCE key secret part (base64) |
-| `SIP_OUTBOUND_TRUNK_ID` | ❌ | Outbound trunk ID (for outbound calls) |
+| Variable | Description |
+|----------|-------------|
+| `LIVEKIT_URL` | `ws://<host>:7880` |
+| `LIVEKIT_API_KEY` | From `livekit.yaml` |
+| `LIVEKIT_API_SECRET` | From `livekit.yaml` |
+| `EXTERNAL_IP` | Server public IP |
+| `LLM_BASE_URL` | OpenAI-compatible LLM endpoint |
+| `LLM_API_KEY` | LLM API key (use `ollama` for Ollama) |
+| `SBER_CLIENT_ID` | Sber RCE key Client ID |
+| `SBER_CLIENT_SECRET` | Sber RCE key secret (base64) |
+| `SIP_OUTBOUND_TRUNK_ID` | LiveKit outbound trunk ID (for outbound calls) |
 
----
+See [`.env.example`](.env.example) for the full list.
 
-## Agent architecture
+## 🧠 How It Works
 
-The agent runs in **two modes**, determined automatically:
+### Agent Architecture
 
-| Mode | Condition | Description |
-|------|-----------|-------------|
-| **inbound** | metadata is empty or has no `phone_number` | Agent waits for an incoming SIP call |
-| **outbound** | metadata contains `"phone_number": "+7..."` | Agent dials out and speaks |
+The LiveKit agent runs in **two modes**, determined automatically from dispatch metadata:
 
----
+| Mode | Trigger | Behaviour |
+|------|---------|-----------|
+| **inbound** | metadata has no `phone_number` | Agent waits for an incoming SIP call |
+| **outbound** | metadata has `"phone_number": "+7..."` | Agent dials out and starts speaking |
 
-## LiveKit SIP Setup (CLI)
+### Call Flow
+
+```
+ ┌──────────┐     ┌──────────────┐     ┌───────────┐     ┌──────────┐     ┌───────────┐
+ │  Caller  │ SIP │ LiveKit SIP  │ WS  │  Agent    │ gRPC │ Sber STT │     │   LLM     │
+ │          │────►│   Trunk      │────►│(LiveKit   │─────►│(Salute-  │     │(Ollama /  │
+ │          │     │              │     │  SDK)     │      │ Speech)  │     │  OpenAI)  │
+ │          │◄────│              │◄────│           │◄─────│          │     │           │
+ │          │ SIP │              │ WS  │           │HTTP │          │     │           │
+ └──────────┘     └──────────────┘     │           │     └──────────┘     └───────────┘
+                                       │           │◄────── HTTP ─────────┐
+                                       │           │                      │
+                                       └───────────┘          ┌───────────┴───────────┐
+                                                              │     Silero TTS        │
+                                                              │    (tts-service)      │
+                                                              └───────────────────────┘
+```
+
+1. **Call arrives** — SIP provider rings LiveKit SIP Trunk
+2. **Agent joins** — LiveKit dispatches the call to the agent
+3. **Listening** — agent opens a gRPC stream to Sber STT and listens for speech
+4. **User speaks** — audio is streamed to Sber, which detects end-of-utterance (EOU)
+5. **Confirmation** — agent instantly plays a short "one moment" phrase via Silero TTS
+6. **LLM turn** — transcript is sent to the LLM; the response is streamed back
+7. **Response spoken** — LLM text is synthesised by Silero TTS and played to the caller
+8. **Loop** — agent returns to listening state for the next turn
+
+### Turn-taking (Strict FSM)
+
+Turn handling is strict — no overlap between user and agent speech:
+
+- `allow_interruptions=False` — Sber transcripts received during agent TTS are ignored
+- `discard_audio_if_uninterruptible=False` — no audio filtering, Sber decides
+- Server-side endpointing via Sber's EOU signal, no client-side VAD
+
+## 🗺️ Service Map
+
+| Service | Container | Role |
+|---------|-----------|------|
+| **livekit** | `livekit` | WebRTC SFU (signalling + media), v1.12 |
+| **redis** | `redis` | LiveKit coordination |
+| **lk-tts** | `tts-service` | Silero TTS HTTP microservice |
+| **lk-auth** | `auth-service` | Sber OAuth 2.0 token management |
+| **lk-inbound** | `agent` | LiveKit Agent — SIP ↔ LLM orchestration |
+
+## 🔧 LiveKit SIP Setup
 
 ### 1. Inbound trunk — receive calls from SIP provider
 
@@ -58,15 +125,9 @@ lk sip inbound list   # save trunk_id
 
 ### 2. Outbound trunk — outbound calls
 
-For Mango:
 ```bash
 MANGO_PASSWORD=$MANGO_PASSWORD lk sip outbound create outbound-trunk.json
 lk sip outbound list   # save trunk_id → SIP_OUTBOUND_TRUNK_ID
-```
-
-For B2BUA (if used):
-```bash
-lk sip outbound create outbound-trunk.json   # address: "${EXTERNAL_IP}:5062"
 ```
 
 ### 3. Dispatch rule — route inbound call to agent
@@ -84,59 +145,33 @@ lk dispatch create \
   --metadata '{"phone_number": "+71234567890"}'
 ```
 
-The agent will create a SIP participant using the configured `SIP_OUTBOUND_TRUNK_ID`.
+## 📊 Architecture
 
-### 5. Direct SIP call (without agent, for debugging)
-
-```bash
-lk sip participant create \
-  --trunk <SIP_OUTBOUND_TRUNK_ID> \
-  --room <ROOM_NAME> \
-  --call +71234567890 \
-  --identity sip-caller \
-  --wait
+```
+livekit-agent/
+├── my_agent/                # LiveKit agent package
+│   ├── session.py           # CallSession — turn orchestration
+│   ├── plugin_stt.py        # WebSocket STT plugin (→ Sber)
+│   ├── plugin_tts.py        # HTTP TTS plugin (→ Silero)
+│   ├── plugin_tts_transforms.py  # Text transforms (digits → words)
+│   ├── sentence_splitter.py # Aggressive sentence tokenizer for TTS
+│   ├── http_api.py          # FastAPI (/call, /hangup)
+│   └── config.py            # Centralised configuration
+├── stt_service/             # STT microservice
+│   ├── server.py            # HTTP/WebSocket entrypoint
+│   ├── sber_stt.py          # gRPC streaming client (Sber v2)
+│   └── token_manager.py     # Sber OAuth 2.0 token management
+├── tts_service/             # TTS microservice
+│   ├── server.py            # HTTP entrypoint
+│   ├── tts_engine.py        # Silero TTS wrapper
+│   └── translit.py          # Latin → Cyrillic transliteration
+└── tests/                   # Pytest suite (52 tests)
 ```
 
-Or via JSON file:
-```bash
-lk sip participant create participant.json
-```
+## 🤝 Contributing
 
-Where `participant.json`:
-```json
-{
-  "sip_trunk_id": "<SIP_OUTBOUND_TRUNK_ID>",
-  "sip_call_to": "+71234567890",
-  "room_name": "<ROOM_NAME>",
-  "participant_identity": "sip-caller",
-  "wait_until_answered": true
-}
-```
+Contributions are welcome! Please open an issue or pull request.
 
-### 6. Debugging
-
-```bash
-lk sip inbound list
-lk sip outbound list
-lk sip dispatch list
-lk room list
-lk dispatch list <room_name>
-lk token create --join --room "test-room" --identity "debug-user" --open meet
-```
-
-## Troubleshooting
-
-| Error | Cause | Solution |
-|-------|-------|----------|
-| `missing sip trunk id` | `SIP_OUTBOUND_TRUNK_ID` not set in agent container | `lk sip outbound list` → copy ID into `.env` |
-| `SIP status: 403` | Invalid credentials or IP not allowed | Check login/password, whitelist IP |
-| `SIP status: 486` | Callee busy | Try again later |
-| `SIP status: 480` | Callee unavailable | Check the phone number |
-| `no response from servers` | Agent not running or dispatch without `--agent-name` | Check `docker logs`, use `--agent-name sber-voice-assistant` |
-| `not dispatching agent job since no worker is available` | `--agent-name` does not match agent name | Use `sber-voice-assistant` |
-| `agent_name mismatch` | Agent name mismatch | `--agent-name` must match `agent_name` in `WorkerOptions` |
-| `TypeError: object NoneType can't be used in 'await' expression` | `ctx.shutdown()` is not async | Remove `await` (fixed in code) |
-
-## License
+## 📄 License
 
 MIT
