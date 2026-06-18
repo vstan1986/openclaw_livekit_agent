@@ -170,8 +170,22 @@ livekit-agent/
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please open an issue or pull request.
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## 🔒 Security
+
+See [SECURITY.md](SECURITY.md) for our security policy and vulnerability reporting process.
 
 ## 📄 License
 
-MIT
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+
+### Third-Party Licenses
+
+This project uses several open-source components with different licenses.
+See [NOTICE.md](NOTICE.md) for full attribution and license information,
+including:
+
+- **Apache 2.0** — livekit-agents, livekit-plugins-openai, requests, grpcio, protobuf
+- **LGPL** — num2words
+- **CC BY-NC-SA 4.0** — Silero TTS model weights (non-commercial use only)
