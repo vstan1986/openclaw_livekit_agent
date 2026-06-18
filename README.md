@@ -3,14 +3,15 @@
   <img src="https://img.shields.io/badge/Silero%20TTS-v1.0-green" alt="Silero TTS">
   <img src="https://img.shields.io/badge/LiveKit%20Agent-v1.6-purple?logo=livekit" alt="LiveKit">
   <img src="https://img.shields.io/badge/Sber%20STT-SaluteSpeech-blueviolet" alt="Sber STT">
+  <img src="https://img.shields.io/badge/OpenClaw-plugin-orange" alt="OpenClaw Plugin">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
 </p>
 
-# LiveKit Voice Agent — SIP-Backed Voice Assistant
+# LiveKit Voice Agent — Voice Channel for OpenClaw AI
 
-**A voice AI assistant that answers calls over SIP and speaks back using Sber Voice (STT/TTS) and an LLM of your choice.**
+**A voice AI assistant that answers calls over SIP and speaks back using Sber Voice (STT/TTS) and any OpenAI-compatible LLM. Works perfectly as a real-time voice channel for [OpenClaw](https://github.com/vstan1986/openclaw) AI agents via OpenClaw's OpenAI-compatible API.**
 
-Callers speak to the assistant over a regular phone line (SIP). The assistant transcribes their speech with Sber STT, generates a response with any OpenAI-compatible LLM (Ollama, GPT, etc.), and speaks it back using Silero TTS — all in real time.
+Callers speak to the assistant over a regular phone line (SIP). The assistant transcribes their speech with Sber STT, generates a response with any OpenAI-compatible LLM (including OpenClaw's built-in API), and speaks it back using Silero TTS — all in real time.
 
 ```
 Caller ◄──SIP──► LiveKit SIP Trunk ◄──WebRTC──► Agent (LiveKit SDK)
@@ -18,14 +19,18 @@ Caller ◄──SIP──► LiveKit SIP Trunk ◄──WebRTC──► Agent (L
                                            ┌────────┼────────┐
                                            ▼        ▼        ▼
                                         Sber STT  LLM   Silero TTS
+                                                   │
+                                          OpenClaw │ OpenAI-compatible
+                                          AI Agent │ (Ollama, GPT, ...)
 ```
 
 ## ✨ Features
 
+- **🤖 OpenClaw AI voice channel** — use any [OpenClaw](https://github.com/vstan1986/openclaw) agent as the LLM brain via its OpenAI-compatible API
 - **📞 SIP telephony** — inbound + outbound calls via LiveKit SIP Trunk
 - **🎙️ Sber SaluteSpeech STT** — gRPC streaming speech recognition (Russian language)
 - **🗣️ Silero TTS** — self-hosted neural text-to-speech (HTTP microservice)
-- **🧠 Any LLM** — OpenAI-compatible API (Ollama, GPT, Claude, etc.)
+- **🧠 Any LLM** — OpenAI-compatible API (OpenClaw, Ollama, GPT, Claude, etc.)
 - **🔇 No VAD needed** — server-side endpointing via Sber's EOU detection
 - **🛡️ Confirmation phrases** — instant "one moment" playback while LLM thinks (no silence gaps)
 - **🔌 Modular services** — STT, TTS, auth all run as separate microservices
@@ -50,8 +55,8 @@ docker compose up -d
 | `LIVEKIT_API_KEY` | From `livekit.yaml` |
 | `LIVEKIT_API_SECRET` | From `livekit.yaml` |
 | `EXTERNAL_IP` | Server public IP |
-| `LLM_BASE_URL` | OpenAI-compatible LLM endpoint |
-| `LLM_API_KEY` | LLM API key (use `ollama` for Ollama) |
+| `LLM_BASE_URL` | OpenAI-compatible LLM endpoint (e.g. `http://openclaw:8080/v1` for OpenClaw) |
+| `LLM_API_KEY` | LLM API key (use `ollama` for Ollama, `openclaw` for OpenClaw) |
 | `SBER_CLIENT_ID` | Sber RCE key Client ID |
 | `SBER_CLIENT_SECRET` | Sber RCE key secret (base64) |
 | `SIP_OUTBOUND_TRUNK_ID` | LiveKit outbound trunk ID (for outbound calls) |
@@ -74,9 +79,9 @@ The LiveKit agent runs in **two modes**, determined automatically from dispatch 
 ```
  ┌──────────┐     ┌──────────────┐     ┌───────────┐     ┌──────────┐     ┌───────────┐
  │  Caller  │ SIP │ LiveKit SIP  │ WS  │  Agent    │ gRPC │ Sber STT │     │   LLM     │
- │          │────►│   Trunk      │────►│(LiveKit   │─────►│(Salute-  │     │(Ollama /  │
- │          │     │              │     │  SDK)     │      │ Speech)  │     │  OpenAI)  │
- │          │◄────│              │◄────│           │◄─────│          │     │           │
+ │          │────►│   Trunk      │────►│(LiveKit   │─────►│(Salute-  │     │(OpenClaw /│
+ │          │     │              │     │  SDK)     │      │ Speech)  │     │ Ollama /  │
+ │          │◄────│              │◄────│           │◄─────│          │     │  GPT)     │
  │          │ SIP │              │ WS  │           │HTTP │          │     │           │
  └──────────┘     └──────────────┘     │           │     └──────────┘     └───────────┘
                                        │           │◄────── HTTP ─────────┐
@@ -92,7 +97,7 @@ The LiveKit agent runs in **two modes**, determined automatically from dispatch 
 3. **Listening** — agent opens a gRPC stream to Sber STT and listens for speech
 4. **User speaks** — audio is streamed to Sber, which detects end-of-utterance (EOU)
 5. **Confirmation** — agent instantly plays a short "one moment" phrase via Silero TTS
-6. **LLM turn** — transcript is sent to the LLM; the response is streamed back
+6. **LLM turn** — transcript is sent to the LLM (OpenClaw, Ollama, GPT, etc.); the response is streamed back
 7. **Response spoken** — LLM text is synthesised by Silero TTS and played to the caller
 8. **Loop** — agent returns to listening state for the next turn
 
