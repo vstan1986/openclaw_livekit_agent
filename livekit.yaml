@@ -1,0 +1,25 @@
+port: 7880
+bind_addresses:
+    - "127.0.0.1"
+rtc:
+    tcp_port: 7881
+    port_range_start: 50000
+    port_range_end: 60000
+    use_external_ip: false
+    enable_loopback_candidate: false
+redis:
+    address: localhost:6379
+    username: ""
+    password: ""
+    db: 0
+    use_tls: false
+    sentinel_master_name: ""
+    sentinel_username: ""
+    sentinel_password: ""
+    sentinel_addresses: []
+    cluster_addresses: []
+    max_redirects: null
+turn:
+    enabled: false
+keys:
+    "{{YOUR_LIVEKIT_API_KEY}}": "{{YOUR_LIVEKIT_API_SECRET}}"

@@ -1,0 +1,130 @@
+services:
+  # ==========================================================================
+  # LiveKit — WebRTC SFU (Signal)
+  # ==========================================================================
+  livekit:
+    image: livekit/livekit-server:v1.12.0
+    command: --config /etc/livekit.yaml
+    restart: unless-stopped
+    network_mode: "host"
+    env_file:
+      - .env
+    environment:
+      LIVEKIT_RTC_EXTERNAL_IP: ${EXTERNAL_IP}
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml
+
+  # ==========================================================================
+  # Redis — for LiveKit coordination
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    command: redis-server /etc/redis.conf
+    restart: unless-stopped
+    network_mode: "host"
+    volumes:
+      - ./redis.conf:/etc/redis.conf
+      - redis_data:/data
+
+  # ==========================================================================
+  # LiveKit SIP — SIP gateway (SIP → WebRTC)
+  # ==========================================================================
+  sip:
+    image: livekit/sip:latest
+    restart: unless-stopped
+    network_mode: "host"
+    env_file:
+      - .env
+    environment:
+      SIP_CONFIG_BODY: |
+        api_key: '${LIVEKIT_API_KEY}'
+        api_secret: '${LIVEKIT_API_SECRET}'
+        ws_url: '${LIVEKIT_WS_URL:-ws://127.0.0.1:7880}'
+        redis:
+          address: '127.0.0.1:6379'
+        sip_host: '0.0.0.0'
+        sip_port: 5059
+        rtp_port: 10000-20000
+        use_external_ip: true
+        external_ip: '${EXTERNAL_IP}'
+        auto_subscribe: true
+        logging:
+          level: debug
+
+  # ==========================================================================
+  # TTS Service — Silero TTS microservice (HTTP)
+  # ==========================================================================
+  lk-tts:
+    build:
+      context: livekit-agent/
+      dockerfile: tts_service/Dockerfile
+    container_name: lk-tts
+    network_mode: host
+    restart: unless-stopped
+    mem_limit: 1g
+    mem_reservation: 512m
+    env_file:
+      - .env
+    environment:
+      - TTS_SERVICE_PORT=8090
+      - SILERO_MODEL_ID=v5_5_ru
+      - SILERO_SPEAKER=eugene
+      - SILERO_SAMPLE_RATE=24000
+      - SILERO_DEVICE=cpu
+      - SILERO_NUM_THREADS=4
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+  # ==========================================================================
+  # STT Service — Sber SaluteSpeech gRPC client + OAuth 2.0 + WebSocket
+  # ==========================================================================
+  lk-stt:
+    build:
+      context: livekit-agent/
+      dockerfile: stt_service/Dockerfile
+    container_name: lk-stt
+    network_mode: host
+    restart: unless-stopped
+    mem_limit: 256m
+    mem_reservation: 128m
+    env_file:
+      - .env
+    environment:
+      - STT_SERVICE_PORT=8092
+      - SBER_CLIENT_ID=${SBER_CLIENT_ID:?required}
+      - SBER_CLIENT_SECRET=${SBER_CLIENT_SECRET:?required}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+  # ==========================================================================
+  # LiveKit Agent — voice assistant (SIP → WebRTC)
+  # ==========================================================================
+  lk-agent:
+    build:
+      context: livekit-agent/
+      dockerfile: Dockerfile
+    container_name: lk-agent
+    network_mode: host
+    restart: unless-stopped
+    mem_limit: 1g
+    mem_reservation: 512m
+    env_file:
+      - .env
+    environment:
+      - AGENT_PORT=8081
+      - STT_SERVICE_URL=http://127.0.0.1:8092
+      - TTS_SERVICE_URL=http://127.0.0.1:8090
+      - SILERO_SPEAKER=${SILERO_SPEAKER:-eugene}
+      - SILERO_SAMPLE_RATE=${SILERO_SAMPLE_RATE:-24000}
+      - LLM_BASE_URL=${LLM_BASE_URL:?required}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_MODEL=${LLM_MODEL:-llama3.1:8b}
+      - LIVEKIT_URL=${LIVEKIT_URL:?required}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+      - LIVEKIT_AGENT_NAME=${LIVEKIT_AGENT_NAME:-sber-voice-assistant}
+      - SIP_OUTBOUND_TRUNK_ID=${SIP_OUTBOUND_TRUNK_ID:-}
+      - CALL_API_PORT=8083
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - RUST_LOG=error
+
+volumes:
+  redis_data:

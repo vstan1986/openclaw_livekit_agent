@@ -1,0 +1,8 @@
+{
+  "sip_trunk_id": "<SIP_OUTBOUND_TRUNK_ID>",
+  "sip_call_to": "+71234567890",
+  "room_name": "<ROOM_NAME>",
+  "participant_identity": "sip-caller",
+  "participant_name": "sip-caller",
+  "wait_until_answered": true
+}

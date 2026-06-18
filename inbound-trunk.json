@@ -1,0 +1,6 @@
+{
+  "trunk": {
+    "name": "mango-inbound",
+    "numbers": ["*"]
+  }
+}

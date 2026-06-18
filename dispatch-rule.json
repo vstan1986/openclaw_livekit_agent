@@ -1,0 +1,17 @@
+{
+  "dispatch_rule": {
+    "name": "mango-dispatch",
+    "rule": {
+      "dispatchRuleIndividual": {
+        "roomPrefix": "call-"
+      }
+    },
+    "roomConfig": {
+      "agents": [
+        {
+          "agentName": "sber-voice-assistant"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "trunk": {
+    "name": "b2bua-outbound",
+    "address": "${EXTERNAL_IP}:5062",
+    "numbers": ["*"],
+    "authUsername": "",
+    "authPassword": ""
+  }
+}

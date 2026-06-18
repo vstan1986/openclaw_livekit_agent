@@ -1,0 +1,22 @@
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+.env
+*.egg-info/
+
+# Ruff cache
+.ruff_cache/
+
+# pytest
+.pytest_cache/
+
+# Agent temp
+.agent_tmp/
+
+# Silero cached models (auto-downloaded at first use)
+silero_models/
+
+# uv (used for local dev only, deps pinned via requirements.txt + Dockerfile)
+uv.lock
+.venv/
